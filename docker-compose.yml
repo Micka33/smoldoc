@@ -1,0 +1,84 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: smoldoc
+      POSTGRES_PASSWORD: smoldoc
+      POSTGRES_DB: smoldoc
+    ports:
+      - "5432:5432"
+    volumes:
+      - smoldoc_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smoldoc -d smoldoc"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - smoldoc_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Optional: MCP + worker in Docker (profile "app").
+  # For desktop MCP clients, run only postgres+redis here and use pnpm on the host.
+  smoldoc-mcp:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["node", "dist/mcp.js"]
+    environment:
+      DATABASE_URL: postgresql://smoldoc:smoldoc@postgres:5432/smoldoc
+      REDIS_URL: redis://redis:6379
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAPI_API_KEY: ${OPENAPI_API_KEY:-}
+      SMOLDOC_OPENAI_MODEL: ${SMOLDOC_OPENAI_MODEL:-gpt-5.5}
+      SMOLDOC_REASONING_EFFORT: ${SMOLDOC_REASONING_EFFORT:-high}
+      SMOLDOC_PAGE_CACHE_DIR: /data/pages
+      SMOLDOC_ALLOWED_HOSTS: ${SMOLDOC_ALLOWED_HOSTS:-}
+    volumes:
+      - smoldoc_pages:/data/pages
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    stdin_open: true
+    tty: true
+
+  smoldoc-worker:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["node", "dist/worker.js"]
+    environment:
+      DATABASE_URL: postgresql://smoldoc:smoldoc@postgres:5432/smoldoc
+      REDIS_URL: redis://redis:6379
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAPI_API_KEY: ${OPENAPI_API_KEY:-}
+      SMOLDOC_OPENAI_MODEL: ${SMOLDOC_OPENAI_MODEL:-gpt-5.5}
+      SMOLDOC_REASONING_EFFORT: ${SMOLDOC_REASONING_EFFORT:-high}
+      SMOLDOC_PAGE_CACHE_DIR: /data/pages
+      SMOLDOC_ALLOWED_HOSTS: ${SMOLDOC_ALLOWED_HOSTS:-}
+    volumes:
+      - smoldoc_pages:/data/pages
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  smoldoc_pg:
+  smoldoc_redis:
+  smoldoc_pages:
