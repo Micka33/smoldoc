@@ -156,6 +156,7 @@ export function toolResultFromAnswer(payload: {
   sources: { url: string; note?: string }[];
   fromAnswerCache: boolean;
   pagesFetched: number;
+  parallelChildRuns: number;
   taskId: string;
 }): CallToolResult {
   const structured = {
@@ -164,6 +165,7 @@ export function toolResultFromAnswer(payload: {
     sources: payload.sources,
     fromAnswerCache: payload.fromAnswerCache,
     pagesFetched: payload.pagesFetched,
+    parallelChildRuns: payload.parallelChildRuns,
   };
   return {
     content: [

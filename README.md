@@ -1,25 +1,35 @@
 # smoldoc
 
-Documentation research **MCP server** (stdio): fetches public doc URLs, caches pages in **PostgreSQL** + on-disk markdown, deduplicates synthesized answers by `(goal, urls, docVersion, model)`, and returns a **short actionable answer** via **MCP tasks** so the host does not block on HTTP for minutes.
+Documentation research **MCP server** (stdio): the heavy work runs in a **worker** that shells out to **[pi](https://github.com/badlogic/pi-mono)** (`pi run -p` by default). The coordinator prompt (`packages/server/prompts/coordinator.md`) instructs pi to **plan**, optionally **spawn parallel `pi run` children**, use pi’s **tool harness** (`bash`, `read`, `grep`, …), then return a **short actionable answer**. Results are delivered via **MCP tasks** (Redis-backed) so the host does not block for minutes.
+
+PostgreSQL still holds the **schema** from earlier iterations (page/answer cache tables); the current pi path does not populate them yet—treat that as reserved for future smoldoc-native tools or a pi extension.
 
 ## Architecture
 
 - **MCP process** (`packages/server`): registers `doc_research` as an **experimental task tool** (`taskSupport: required`). Task state lives in **Redis** (`RedisTaskStore`).
-- **Worker process** (`packages/server`): **BullMQ** consumer that performs fetch + OpenAI synthesis, then writes the final `CallToolResult` into the task store.
+- **Worker process** (`packages/server`): **BullMQ** consumer that runs **`pi run -p`** with the coordinator prompt, then writes the final `CallToolResult` into the task store.
 
-Both processes need `DATABASE_URL`, `REDIS_URL`, and an OpenAI key (`OPENAI_API_KEY`, or `OPENAPI_API_KEY` as an alias).
+Processes need **`DATABASE_URL`**, **`REDIS_URL`**, and a machine where **`pi`** is installed and authenticated (API keys for the provider pi uses, e.g. `OPENAI_API_KEY`).
 
 ## Prerequisites
 
 - Node 20+ (repo targets 22)
 - `pnpm` 9
 - Docker (for Postgres + Redis)
+- **Pi coding agent**: `npm install -g @mariozechner/pi-coding-agent` (upstream CLI is `pi`; smoldoc defaults to **`pi run`**—see below)
+
+### `pi run` vs upstream `pi`
+
+Upstream documents non-interactive use as **`pi -p "…"`**. smoldoc standardizes on **`pi run …`** so coordinator prompts can tell the model to spawn **`pi run -p "…"`** children consistently.
+
+- **On the host:** add a small wrapper named `pi` that handles `run`, or set `SMOLDOC_PI_COMMAND=pi` to call `pi` directly (children in the prompt should then use the same).
+- **In Docker:** the image installs `@mariozechner/pi-coding-agent` and replaces the `pi` binary with a **shim** so **`pi run`** forwards to **`pi-real`** (the original CLI).
 
 ## Quick start (local MCP + Docker infra)
 
 ```bash
 cp .env.example .env
-# edit .env: OPENAI_API_KEY, DATABASE_URL, REDIS_URL
+# edit .env: DATABASE_URL, REDIS_URL, SMOLDOC_PI_CWD (repo root), provider keys for pi
 
 docker compose up -d postgres redis
 
@@ -27,69 +37,34 @@ cd packages/server
 pnpm install
 pnpm run build
 
-# terminal 1
+# terminal 1 — needs `pi` on PATH and provider auth
 pnpm run start:worker
 
-# terminal 2 (stdio MCP — used by Cursor / Claude Desktop)
+# terminal 2 (stdio MCP — Cursor / Claude Desktop)
 pnpm run start:mcp
 ```
 
 ### Cursor / Claude Desktop
 
-Point the MCP config at:
+Point the MCP config at `packages/server/dist/mcp.js` and pass **`DATABASE_URL`** + **`REDIS_URL`**. The **worker** machine (often the same host) must run `start:worker` with **`pi`** available.
 
-```json
-{
-  "mcpServers": {
-    "smoldoc": {
-      "command": "node",
-      "args": ["/absolute/path/to/repo/packages/server/dist/mcp.js"],
-      "env": {
-        "DATABASE_URL": "postgresql://smoldoc:smoldoc@127.0.0.1:5432/smoldoc",
-        "REDIS_URL": "redis://127.0.0.1:6379",
-        "OPENAI_API_KEY": "sk-..."
-      }
-    }
-  }
-}
-```
-
-**Important:** the client must support **MCP tasks** (tools/call with task augmentation, `tasks/get`, `tasks/result`). The tool advertises `pollInterval` of **30s**—poll status at that interval, not on every token tick.
+**Important:** the client must support **MCP tasks** (`tasks/get`, `tasks/result`). Respect **`pollInterval`** (30s)—do not poll every second.
 
 ## Tool: `doc_research`
 
-Parameters:
+Parameters: `goal`, optional `context`, `docVersion`, `urls` (1–32).
 
-- `goal` — precise question for the docs
-- `context` — optional short caller context
-- `docVersion` — version label for cache invalidation (e.g. `v1.2.3`)
-- `urls` — 1–32 HTTP(S) documentation URLs
+Structured result includes `parallelChildRuns` (from the coordinator’s trailing `SMOLDOC_META_JSON:` line when present).
 
-Flow:
+## Docker Compose
 
-1. `tools/call` with task params → receive `taskId` and `pollInterval`
-2. `tasks/get` until `status` is `completed` or `failed` (respect `pollInterval`)
-3. `tasks/result` → `CallToolResult` with markdown in `content` and metadata in `structuredContent`
-
-## Docker Compose (optional all-in-one)
-
-Infra only (default):
-
-```bash
-docker compose up -d postgres redis
-```
-
-Full stack (MCP + worker in containers; stdio MCP is awkward from Compose—prefer local `start:mcp` for IDE integration):
-
-```bash
-export OPENAI_API_KEY=sk-...
-docker compose --profile app up -d --build
-```
+- **Default:** `postgres` + `redis` only.
+- **Profile `app`:** builds an image with Node + **pi** + shim; runs `smoldoc-mcp` and `smoldoc-worker`. Pass provider keys (e.g. `OPENAI_API_KEY`) for pi.
 
 ## Environment
 
-See `.env.example`. Optional `SMOLDOC_ALLOWED_HOSTS` (comma-separated) restricts outbound fetches.
+See `.env.example` for **`SMOLDOC_PI_*`** variables (`SMOLDOC_PI_COMMAND`, `SMOLDOC_PI_CWD`, `SMOLDOC_PI_EXTRA_ARGS`, optional `--model` / `--provider` / `--thinking`).
 
 ## Stack
 
-- TypeScript, `@modelcontextprotocol/server` (v2 alpha), Zod 4, BullMQ, ioredis, pg, OpenAI Node SDK, undici
+TypeScript, `@modelcontextprotocol/server` (v2 alpha), Zod 4, BullMQ, ioredis, pg; **pi** (`@mariozechner/pi-coding-agent`) for doc research execution.

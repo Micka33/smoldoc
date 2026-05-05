@@ -39,10 +39,6 @@ services:
     environment:
       DATABASE_URL: postgresql://smoldoc:smoldoc@postgres:5432/smoldoc
       REDIS_URL: redis://redis:6379
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAPI_API_KEY: ${OPENAPI_API_KEY:-}
-      SMOLDOC_OPENAI_MODEL: ${SMOLDOC_OPENAI_MODEL:-gpt-5.5}
-      SMOLDOC_REASONING_EFFORT: ${SMOLDOC_REASONING_EFFORT:-high}
       SMOLDOC_PAGE_CACHE_DIR: /data/pages
       SMOLDOC_ALLOWED_HOSTS: ${SMOLDOC_ALLOWED_HOSTS:-}
     volumes:
@@ -61,17 +57,24 @@ services:
       context: .
       dockerfile: Dockerfile
     command: ["node", "dist/worker.js"]
+    working_dir: /app/packages/server
     environment:
       DATABASE_URL: postgresql://smoldoc:smoldoc@postgres:5432/smoldoc
       REDIS_URL: redis://redis:6379
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAPI_API_KEY: ${OPENAPI_API_KEY:-}
-      SMOLDOC_OPENAI_MODEL: ${SMOLDOC_OPENAI_MODEL:-gpt-5.5}
-      SMOLDOC_REASONING_EFFORT: ${SMOLDOC_REASONING_EFFORT:-high}
+      SMOLDOC_PI_COMMAND: pi run
+      SMOLDOC_PI_CWD: /host
+      SMOLDOC_PI_EXTRA_ARGS: --no-context-files
+      SMOLDOC_PI_PROVIDER: ${SMOLDOC_PI_PROVIDER:-}
+      SMOLDOC_PI_MODEL: ${SMOLDOC_PI_MODEL:-}
+      SMOLDOC_PI_THINKING: ${SMOLDOC_PI_THINKING:-}
       SMOLDOC_PAGE_CACHE_DIR: /data/pages
       SMOLDOC_ALLOWED_HOSTS: ${SMOLDOC_ALLOWED_HOSTS:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      PI_SKIP_VERSION_CHECK: "1"
     volumes:
       - smoldoc_pages:/data/pages
+      - .:/host:ro
     depends_on:
       postgres:
         condition: service_healthy

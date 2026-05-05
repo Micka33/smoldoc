@@ -5,24 +5,23 @@ function firstNonEmpty(...values: Array<string | undefined>): string | undefined
   return undefined;
 }
 
-export function loadEnv(): {
-  openaiApiKey: string;
+export type SmoldocEnv = {
   databaseUrl: string;
   redisUrl: string;
-  openaiModel: string;
-  reasoningEffort: "low" | "medium" | "high";
   pageCacheDir: string;
   allowedHosts: string[] | null;
-} {
-  const openaiApiKey = firstNonEmpty(
-    process.env.OPENAI_API_KEY,
-    process.env.OPENAPI_API_KEY,
-  );
-  if (!openaiApiKey) {
-    throw new Error(
-      "Missing API key: set OPENAI_API_KEY (or OPENAPI_API_KEY for compatibility).",
-    );
-  }
+  /** argv0 for doc research subprocess (default `pi run`). */
+  piCommand: string;
+  /** Working directory for pi (repo root recommended). */
+  piCwd: string;
+  /** Extra CLI tokens after `pi run` (e.g. `--extension ./x.ts`). */
+  piExtraArgs: string[];
+  piProvider?: string;
+  piModel?: string;
+  piThinking?: string;
+};
+
+export function loadEnv(): SmoldocEnv {
   const databaseUrl = firstNonEmpty(process.env.DATABASE_URL);
   if (!databaseUrl) {
     throw new Error("Missing DATABASE_URL.");
@@ -39,19 +38,26 @@ export function loadEnv(): {
         .filter(Boolean)
     : null;
 
-  const reasoningRaw = (firstNonEmpty(process.env.SMOLDOC_REASONING_EFFORT) ?? "high").toLowerCase();
-  const reasoningEffort =
-    reasoningRaw === "low" || reasoningRaw === "medium" || reasoningRaw === "high"
-      ? reasoningRaw
-      : "high";
+  const piCommand = firstNonEmpty(process.env.SMOLDOC_PI_COMMAND) ?? "pi run";
+  const piCwd = firstNonEmpty(process.env.SMOLDOC_PI_CWD) ?? process.cwd();
+  const piExtraRaw = firstNonEmpty(process.env.SMOLDOC_PI_EXTRA_ARGS);
+  const piExtraArgs = piExtraRaw
+    ? piExtraRaw
+        .split(/\s+/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : [];
 
   return {
-    openaiApiKey,
     databaseUrl,
     redisUrl,
-    openaiModel: firstNonEmpty(process.env.SMOLDOC_OPENAI_MODEL) ?? "gpt-5.5",
-    reasoningEffort,
     pageCacheDir: firstNonEmpty(process.env.SMOLDOC_PAGE_CACHE_DIR) ?? ".data/pages",
     allowedHosts,
+    piCommand,
+    piCwd,
+    piExtraArgs,
+    piProvider: firstNonEmpty(process.env.SMOLDOC_PI_PROVIDER),
+    piModel: firstNonEmpty(process.env.SMOLDOC_PI_MODEL),
+    piThinking: firstNonEmpty(process.env.SMOLDOC_PI_THINKING),
   };
 }

@@ -33,6 +33,7 @@ const docResearchOutputSchema = z.object({
   sources: z.array(z.object({ url: z.string(), note: z.string().optional() })),
   fromAnswerCache: z.boolean(),
   pagesFetched: z.number(),
+  parallelChildRuns: z.number(),
 });
 
 export function registerDocResearchTool(options: {
@@ -47,9 +48,9 @@ export function registerDocResearchTool(options: {
     {
       title: "Documentation research (async)",
       description:
-        "Fetches public documentation pages, caches them by URL + docVersion, synthesizes a concise actionable answer (commands, examples). " +
+        "Runs a **pi** coding agent (`pi run -p`) as coordinator: it plans doc research, may spawn parallel `pi run` children, uses pi's tool harness (bash, curl/wget, etc.), then returns a concise actionable answer. " +
         "Uses MCP tasks: call with task augmentation; poll tasks/get using pollInterval (default 30s) until completed, then tasks/result. " +
-        "Requires a running smoldoc worker process.",
+        "Requires a running smoldoc **worker** with `pi` on PATH (or set SMOLDOC_PI_COMMAND).",
       inputSchema: docResearchInputSchema,
       outputSchema: docResearchOutputSchema,
       execution: { taskSupport: "required" },

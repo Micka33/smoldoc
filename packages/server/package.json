@@ -5,7 +5,7 @@
   "type": "module",
   "main": "dist/mcp.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json && mkdir -p dist/db/migrations && cp -r src/db/migrations/. dist/db/migrations/",
+    "build": "tsc -p tsconfig.json && mkdir -p dist/db/migrations dist/prompts && cp -r src/db/migrations/. dist/db/migrations/ && cp -r prompts/. dist/prompts/",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev:mcp": "tsx src/mcp.ts",
     "dev:worker": "tsx src/worker.ts",
@@ -16,9 +16,7 @@
     "@modelcontextprotocol/server": "2.0.0-alpha.2",
     "bullmq": "^5.34.10",
     "ioredis": "^5.4.2",
-    "openai": "^4.83.0",
     "pg": "^8.13.1",
-    "undici": "^7.3.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
