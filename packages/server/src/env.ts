@@ -1,3 +1,6 @@
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 function firstNonEmpty(...values: Array<string | undefined>): string | undefined {
   for (const v of values) {
     if (v && v.trim().length > 0) return v.trim();
@@ -5,23 +8,26 @@ function firstNonEmpty(...values: Array<string | undefined>): string | undefined
   return undefined;
 }
 
-export type SmoldocEnv = {
+export type SmoldocCoreEnv = {
   databaseUrl: string;
   redisUrl: string;
   pageCacheDir: string;
   allowedHosts: string[] | null;
-  /** argv0 for doc research subprocess (default `pi run`). */
-  piCommand: string;
-  /** Working directory for pi (repo root recommended). */
-  piCwd: string;
-  /** Extra CLI tokens after `pi run` (e.g. `--extension ./x.ts`). */
-  piExtraArgs: string[];
-  piProvider?: string;
-  piModel?: string;
-  piThinking?: string;
 };
 
-export function loadEnv(): SmoldocEnv {
+export type SmoldocWorkerEnv = SmoldocCoreEnv & {
+  openaiApiKey: string;
+  /** Pi SDK session cwd (skills, .pi/, files the agent reads). */
+  piCwd: string;
+  /** Pi config dir (auth.json); default OS temp smoldoc subdir. */
+  piAgentDir: string;
+  /** Model id for getModel(), e.g. gpt-5.5 */
+  piOpenaiModelId: string;
+  /** Pi thinking level */
+  piThinkingLevel: "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+};
+
+export function loadCoreEnv(): SmoldocCoreEnv {
   const databaseUrl = firstNonEmpty(process.env.DATABASE_URL);
   if (!databaseUrl) {
     throw new Error("Missing DATABASE_URL.");
@@ -38,26 +44,71 @@ export function loadEnv(): SmoldocEnv {
         .filter(Boolean)
     : null;
 
-  const piCommand = firstNonEmpty(process.env.SMOLDOC_PI_COMMAND) ?? "pi run";
-  const piCwd = firstNonEmpty(process.env.SMOLDOC_PI_CWD) ?? process.cwd();
-  const piExtraRaw = firstNonEmpty(process.env.SMOLDOC_PI_EXTRA_ARGS);
-  const piExtraArgs = piExtraRaw
-    ? piExtraRaw
-        .split(/\s+/)
-        .map((s) => s.trim())
-        .filter(Boolean)
-    : [];
-
   return {
     databaseUrl,
     redisUrl,
     pageCacheDir: firstNonEmpty(process.env.SMOLDOC_PAGE_CACHE_DIR) ?? ".data/pages",
     allowedHosts,
-    piCommand,
-    piCwd,
-    piExtraArgs,
-    piProvider: firstNonEmpty(process.env.SMOLDOC_PI_PROVIDER),
-    piModel: firstNonEmpty(process.env.SMOLDOC_PI_MODEL),
-    piThinking: firstNonEmpty(process.env.SMOLDOC_PI_THINKING),
   };
+}
+
+function parseThinking(
+  raw: string | undefined,
+): "off" | "minimal" | "low" | "medium" | "high" | "xhigh" {
+  const v = (raw ?? "high").toLowerCase();
+  if (
+    v === "off" ||
+    v === "minimal" ||
+    v === "low" ||
+    v === "medium" ||
+    v === "high" ||
+    v === "xhigh"
+  ) {
+    return v;
+  }
+  return "high";
+}
+
+export function loadWorkerEnv(): SmoldocWorkerEnv {
+  const core = loadCoreEnv();
+  const openaiApiKey = firstNonEmpty(
+    process.env.OPENAI_API_KEY,
+    process.env.OPENAPI_API_KEY,
+  );
+  if (!openaiApiKey) {
+    throw new Error(
+      "Worker requires OPENAI_API_KEY (or OPENAPI_API_KEY) for the Pi SDK OpenAI provider.",
+    );
+  }
+  const modelSpec =
+    firstNonEmpty(process.env.SMOLDOC_PI_MODEL, process.env.SMOLDOC_OPENAI_MODEL) ??
+    "gpt-5.5";
+  let piOpenaiModelId = modelSpec;
+  if (modelSpec.includes("/")) {
+    const [p, ...rest] = modelSpec.split("/");
+    if (p !== "openai") {
+      throw new Error(
+        `SMOLDOC_PI_MODEL must be an OpenAI model id or openai/<id>; got: ${modelSpec}`,
+      );
+    }
+    piOpenaiModelId = rest.join("/");
+  }
+  const piThinkingLevel = parseThinking(
+    firstNonEmpty(process.env.SMOLDOC_PI_THINKING, process.env.SMOLDOC_REASONING_EFFORT),
+  );
+
+  return {
+    ...core,
+    openaiApiKey,
+    piCwd: firstNonEmpty(process.env.SMOLDOC_PI_CWD) ?? process.cwd(),
+    piAgentDir:
+      firstNonEmpty(process.env.SMOLDOC_PI_AGENT_DIR) ?? join(tmpdir(), "smoldoc-pi-agent"),
+    piOpenaiModelId,
+    piThinkingLevel,
+  };
+}
+
+/** MCP process: DB + Redis only. */
+export function loadEnv(): SmoldocCoreEnv {
+  return loadCoreEnv();
 }

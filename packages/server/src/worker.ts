@@ -1,7 +1,5 @@
 import { Worker } from "bullmq";
-import { loadEnv } from "./env.js";
-import { createPool } from "./db/pool.js";
-import { runMigrations } from "./db/migrate.js";
+import { loadWorkerEnv } from "./env.js";
 import {
   DOC_RESEARCH_QUEUE,
   parseRedisUrl,
@@ -9,12 +7,10 @@ import {
 } from "./queue/docResearchQueue.js";
 import { RedisTaskStore, toolResultFromAnswer, toolResultFromError } from "./mcp/redisTaskStore.js";
 import { Redis } from "ioredis";
-import { loadCoordinatorPromptTemplate, runPiDocResearch } from "./pi/runPiDocResearch.js";
+import { loadCoordinatorPromptTemplate, runPiDocResearchWithSdk } from "./pi/runPiDocResearch.js";
 
 async function main(): Promise<void> {
-  const env = loadEnv();
-  const pool = createPool(env.databaseUrl);
-  await runMigrations(pool);
+  const env = loadWorkerEnv();
   await loadCoordinatorPromptTemplate();
 
   const redisConnection = parseRedisUrl(env.redisUrl);
@@ -29,17 +25,9 @@ async function main(): Promise<void> {
         await taskStore.updateTaskStatus(
           taskId,
           "working",
-          "Running pi coordinator (pi run -p)…",
+          "Pi SDK: documentation research…",
         );
-        const piResult = await runPiDocResearch({
-          env: {
-            piCommand: env.piCommand,
-            cwd: env.piCwd,
-            extraArgs: env.piExtraArgs,
-            provider: env.piProvider,
-            model: env.piModel,
-            thinking: env.piThinking,
-          },
+        const piResult = await runPiDocResearchWithSdk(env, {
           goal,
           context,
           docVersion,
@@ -64,7 +52,7 @@ async function main(): Promise<void> {
         );
       }
     },
-    { connection: redisConnection, concurrency: 2 },
+    { connection: redisConnection, concurrency: 1 },
   );
 
   worker.on("failed", (job, err) => {
@@ -72,7 +60,7 @@ async function main(): Promise<void> {
   });
 
   console.error(
-    `[worker] listening on queue "${DOC_RESEARCH_QUEUE}" (concurrency=2, pi=${env.piCommand})`,
+    `[worker] queue "${DOC_RESEARCH_QUEUE}" (concurrency=1, Pi SDK, model=openai/${env.piOpenaiModelId})`,
   );
 }
 

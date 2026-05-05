@@ -48,9 +48,10 @@ export function registerDocResearchTool(options: {
     {
       title: "Documentation research (async)",
       description:
-        "Runs a **pi** coding agent (`pi run -p`) as coordinator: it plans doc research, may spawn parallel `pi run` children, uses pi's tool harness (bash, curl/wget, etc.), then returns a concise actionable answer. " +
-        "Uses MCP tasks: call with task augmentation; poll tasks/get using pollInterval (default 30s) until completed, then tasks/result. " +
-        "Requires a running smoldoc **worker** with `pi` on PATH (or set SMOLDOC_PI_COMMAND).",
+        "Runs documentation research via the **[Pi coding agent SDK](https://pi.dev/docs/latest/sdk)** (`createAgentSession`): the model **builds its own harness** (scripts, fetch strategy) using Pi tools (`bash`, `read`, `write`, …), may parallelize work, then returns a concise actionable answer. " +
+        "The worker sets **OpenAI** credentials for Pi from `OPENAI_API_KEY` (or `OPENAPI_API_KEY`). " +
+        "Uses MCP tasks: call with task augmentation; poll `tasks/get` using pollInterval (default 30s), then `tasks/result`. " +
+        "Requires a running smoldoc **worker** (`pnpm start:worker`).",
       inputSchema: docResearchInputSchema,
       outputSchema: docResearchOutputSchema,
       execution: { taskSupport: "required" },

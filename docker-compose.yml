@@ -28,8 +28,6 @@ services:
       timeout: 3s
       retries: 10
 
-  # Optional: MCP + worker in Docker (profile "app").
-  # For desktop MCP clients, run only postgres+redis here and use pnpm on the host.
   smoldoc-mcp:
     profiles: ["app"]
     build:
@@ -61,20 +59,19 @@ services:
     environment:
       DATABASE_URL: postgresql://smoldoc:smoldoc@postgres:5432/smoldoc
       REDIS_URL: redis://redis:6379
-      SMOLDOC_PI_COMMAND: pi run
-      SMOLDOC_PI_CWD: /host
-      SMOLDOC_PI_EXTRA_ARGS: --no-context-files
-      SMOLDOC_PI_PROVIDER: ${SMOLDOC_PI_PROVIDER:-}
-      SMOLDOC_PI_MODEL: ${SMOLDOC_PI_MODEL:-}
-      SMOLDOC_PI_THINKING: ${SMOLDOC_PI_THINKING:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAPI_API_KEY: ${OPENAPI_API_KEY:-}
+      SMOLDOC_PI_CWD: /workspace
+      SMOLDOC_PI_AGENT_DIR: /data/pi-agent
+      SMOLDOC_PI_MODEL: ${SMOLDOC_PI_MODEL:-gpt-5.5}
+      SMOLDOC_PI_THINKING: ${SMOLDOC_PI_THINKING:-high}
       SMOLDOC_PAGE_CACHE_DIR: /data/pages
       SMOLDOC_ALLOWED_HOSTS: ${SMOLDOC_ALLOWED_HOSTS:-}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       PI_SKIP_VERSION_CHECK: "1"
     volumes:
       - smoldoc_pages:/data/pages
-      - .:/host:ro
+      - pi_agent_state:/data/pi-agent
+      - .:/workspace
     depends_on:
       postgres:
         condition: service_healthy
@@ -85,3 +82,4 @@ volumes:
   smoldoc_pg:
   smoldoc_redis:
   smoldoc_pages:
+  pi_agent_state:
