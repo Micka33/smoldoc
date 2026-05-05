@@ -10,7 +10,8 @@
     "dev:mcp": "tsx src/mcp.ts",
     "dev:worker": "tsx src/worker.ts",
     "start:mcp": "node dist/mcp.js",
-    "start:worker": "node dist/worker.js"
+    "start:worker": "node dist/worker.js",
+    "test:e2e": "pnpm run build && tsx src/e2e-smoke.ts"
   },
   "dependencies": {
     "@mariozechner/pi-ai": "^0.73.0",

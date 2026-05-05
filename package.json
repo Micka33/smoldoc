@@ -8,6 +8,7 @@
     "dev:worker": "pnpm --filter @smoldoc/server dev:worker",
     "start:mcp": "pnpm --filter @smoldoc/server start:mcp",
     "start:worker": "pnpm --filter @smoldoc/server start:worker",
-    "typecheck": "pnpm --filter @smoldoc/server typecheck"
+    "typecheck": "pnpm --filter @smoldoc/server typecheck",
+    "test:e2e": "pnpm --filter @smoldoc/server test:e2e"
   }
 }

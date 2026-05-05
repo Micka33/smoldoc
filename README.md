@@ -50,6 +50,14 @@ pnpm --filter @smoldoc/server start:worker
 pnpm --filter @smoldoc/server start:mcp
 ```
 
+## Tests E2E
+
+```bash
+pnpm test:e2e
+```
+
+Phase 1–2 : HTTP réel (`example.com`) + résolution semver. Phases 3–4 : si Postgres (pgvector) + Redis + `OPENAI_API_KEY` sont joignables, exécution d’un job BullMQ + Pi jusqu’au résultat MCP.
+
 ## Outil MCP `doc_research`
 
 Entrée (snake_case) :
