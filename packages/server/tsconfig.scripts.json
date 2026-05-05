@@ -2,8 +2,8 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "dist/scripts",
-    "rootDir": "src/scripts",
+    "rootDir": "src",
     "noEmit": false
   },
-  "include": ["src/scripts/**/*.ts"]
+  "include": ["src/scripts/**/*.ts", "src/semver/**/*.ts"]
 }

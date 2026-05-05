@@ -57,6 +57,7 @@ Entrée (snake_case) :
 - `goal`, `context?`
 - `version_policy`: `explicit` | `latest` | `latest_stable` | `range`
 - `explicit_version?`, `as_of_date?`, `version_range?`
+- **`version_candidates`** (string[], **required** when `version_policy` is `range`): release tags / versions to choose from; the server picks the **highest semver** that satisfies `version_range` and uses it as `doc_version` (and in `version_target` in the Pi payload).
 - `source?`, `product?`, `scope?`
 - `urls[]`
 
@@ -71,6 +72,6 @@ Sortie `structuredContent` : `result` (objet typé), `from_answer_cache`, `finge
 Après `pnpm run build` :
 
 - `node packages/server/dist/scripts/fetch-doc.js --url … --doc-version … [--browser]`
-- `parse-doc.js`, `detect-version.js`, `chunk-embed-index.js`, `retrieve-evidence.js`, `self-check.js`
+- `parse-doc.js`, `detect-version.js`, `chunk-embed-index.js`, `retrieve-evidence.js`, `self-check.js`, `resolve-version.js` (semver `range` + liste de candidats)
 
 `CHROMIUM_PATH` peut pointer vers un binaire Chromium custom.

@@ -16,6 +16,8 @@ export type DocResearchJobData = {
   explicitVersion?: string;
   asOfDate?: string;
   versionRange?: string;
+  /** Original list when policy was range (for audit / Pi job payload). */
+  versionCandidates?: string[];
   source?: string;
   product?: string;
   scope?: string;

@@ -17,6 +17,7 @@ export function fingerprintDocResearch(input: {
   explicitVersion?: string;
   asOfDate?: string;
   versionRange?: string;
+  versionCandidates?: string[];
   product?: string;
   source?: string;
   scope?: string;
@@ -30,6 +31,10 @@ export function fingerprintDocResearch(input: {
     explicitVersion: input.explicitVersion ?? "",
     asOfDate: input.asOfDate ?? "",
     versionRange: input.versionRange ?? "",
+    versionCandidates:
+      input.versionPolicy === "range" && input.versionCandidates?.length
+        ? [...input.versionCandidates].map((s) => s.trim()).sort()
+        : [],
     product: input.product ?? "",
     source: input.source ?? "",
     scope: input.scope ?? "",

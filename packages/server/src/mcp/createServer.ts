@@ -10,6 +10,7 @@ import type { Queue } from "bullmq";
 import type { DocResearchJobData } from "../queue/docResearchQueue.js";
 import type { RedisTaskStore } from "./redisTaskStore.js";
 import { smoldocActionableResultSchema } from "../types/actionableResult.js";
+import { resolveRangeToDocVersionLabel } from "./resolveRangeVersion.js";
 
 const versionPolicySchema = z.enum(["explicit", "latest", "latest_stable", "range"]);
 
@@ -27,7 +28,13 @@ const docResearchInputSchema = z.object({
   version_range: z
     .string()
     .optional()
-    .describe("When version_policy is range, e.g. >=2.0.0 <3.0.0"),
+    .describe("When version_policy is range, e.g. >=2.0.0 <3.0.0 or ^1.2.0"),
+  version_candidates: z
+    .array(z.string())
+    .optional()
+    .describe(
+      'Required when version_policy is "range": semver labels to pick from (e.g. release tags). Highest matching version becomes doc_version.',
+    ),
   source: z.string().optional().describe("Logical source id (e.g. github.com/org/repo)."),
   product: z.string().optional().describe("Product name for cache keys."),
   scope: z.string().optional().describe("Doc scope label (e.g. api-reference)."),
@@ -61,7 +68,8 @@ function resolveDocVersionLabel(input: z.infer<typeof docResearchInputSchema>): 
     case "range": {
       const r = input.version_range?.trim();
       if (!r) throw new Error("version_range is required when version_policy is range");
-      return `range:${r}`;
+      const resolved = resolveRangeToDocVersionLabel(r, input.version_candidates);
+      return resolved;
     }
     default: {
       const _exhaustive: never = input.version_policy;
@@ -106,6 +114,7 @@ export function registerDocResearchTool(options: {
             explicitVersion: args.explicit_version,
             asOfDate: args.as_of_date,
             versionRange: args.version_range,
+            versionCandidates: args.version_candidates,
             source: args.source,
             product: args.product,
             scope: args.scope,

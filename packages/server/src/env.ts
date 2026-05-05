@@ -99,6 +99,7 @@ export function loadWorkerEnv(): SmoldocWorkerEnv {
     firstNonEmpty(process.env.SMOLDOC_PI_THINKING, process.env.SMOLDOC_REASONING_EFFORT),
   );
 
+  /** Default: dist/scripts after build (flattened from tsc nested output). */
   const defaultScripts = join(process.cwd(), "dist", "scripts");
   const smoldocScriptsDir = firstNonEmpty(process.env.SMOLDOC_SCRIPTS_DIR) ?? defaultScripts;
 

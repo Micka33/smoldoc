@@ -5,7 +5,7 @@
   "type": "module",
   "main": "dist/mcp.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json && tsc -p tsconfig.scripts.json && mkdir -p dist/db/migrations dist/prompts dist/.pi && cp -r src/db/migrations/. dist/db/migrations/ && cp -r prompts/. dist/prompts/ && cp -r .pi/. dist/.pi/",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.scripts.json && bash -c 'set -e; if [ -d dist/scripts/scripts ]; then mkdir -p dist/scripts.tmp/semver; cp dist/scripts/scripts/*.js dist/scripts.tmp/; cp dist/scripts/semver/*.js dist/scripts.tmp/semver/; rm -rf dist/scripts; mv dist/scripts.tmp dist/scripts; sed -i \"s|from \\\"../semver/semverRange.js\\\"|from \\\"./semver/semverRange.js\\\"|g\" dist/scripts/resolve-version.js; fi' && mkdir -p dist/db/migrations dist/prompts dist/.pi && cp -r src/db/migrations/. dist/db/migrations/ && cp -r prompts/. dist/prompts/ && cp -r .pi/. dist/.pi/",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev:mcp": "tsx src/mcp.ts",
     "dev:worker": "tsx src/worker.ts",

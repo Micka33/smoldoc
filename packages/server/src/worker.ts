@@ -38,6 +38,7 @@ async function main(): Promise<void> {
         explicitVersion: j.explicitVersion,
         asOfDate: j.asOfDate,
         versionRange: j.versionRange,
+        versionCandidates: j.versionCandidates,
         product: j.product,
         source: j.source,
         scope: j.scope,

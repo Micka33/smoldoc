@@ -200,6 +200,7 @@ export async function runPiDocResearchWithSdk(
         explicitVersion: job.explicitVersion,
         asOfDate: job.asOfDate,
         versionRange: job.versionRange,
+        versionCandidates: job.versionCandidates,
         source: job.source,
         product: job.product,
         scope: job.scope,
