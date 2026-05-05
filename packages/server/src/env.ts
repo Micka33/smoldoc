@@ -17,7 +17,7 @@ export type SmoldocCoreEnv = {
 
 export type SmoldocWorkerEnv = SmoldocCoreEnv & {
   openaiApiKey: string;
-  /** Pi SDK session cwd (skills, .pi/, files the agent reads). */
+  /** Pi SDK session cwd (must contain `.pi/skills` — use packages/server or repo with copied skills). */
   piCwd: string;
   /** Pi config dir (auth.json); default OS temp smoldoc subdir. */
   piAgentDir: string;
@@ -25,6 +25,8 @@ export type SmoldocWorkerEnv = SmoldocCoreEnv & {
   piOpenaiModelId: string;
   /** Pi thinking level */
   piThinkingLevel: "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+  /** Directory containing compiled `*.js` scripts (fetch-doc, …). Default: dist/scripts next to worker. */
+  smoldocScriptsDir: string;
 };
 
 export function loadCoreEnv(): SmoldocCoreEnv {
@@ -97,6 +99,9 @@ export function loadWorkerEnv(): SmoldocWorkerEnv {
     firstNonEmpty(process.env.SMOLDOC_PI_THINKING, process.env.SMOLDOC_REASONING_EFFORT),
   );
 
+  const defaultScripts = join(process.cwd(), "dist", "scripts");
+  const smoldocScriptsDir = firstNonEmpty(process.env.SMOLDOC_SCRIPTS_DIR) ?? defaultScripts;
+
   return {
     ...core,
     openaiApiKey,
@@ -105,6 +110,7 @@ export function loadWorkerEnv(): SmoldocWorkerEnv {
       firstNonEmpty(process.env.SMOLDOC_PI_AGENT_DIR) ?? join(tmpdir(), "smoldoc-pi-agent"),
     piOpenaiModelId,
     piThinkingLevel,
+    smoldocScriptsDir,
   };
 }
 

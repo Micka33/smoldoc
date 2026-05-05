@@ -8,6 +8,7 @@ import type {
   TaskStore,
 } from "@modelcontextprotocol/server";
 import type { Redis as RedisClient } from "ioredis";
+import type { SmoldocActionableResult } from "../types/actionableResult.js";
 
 const TASK_PREFIX = "smoldoc:task:";
 const TASK_INDEX = "smoldoc:task:index";
@@ -152,26 +153,26 @@ export class RedisTaskStore implements TaskStore {
 }
 
 export function toolResultFromAnswer(payload: {
-  answerMarkdown: string;
-  sources: { url: string; note?: string }[];
-  fromAnswerCache: boolean;
-  pagesFetched: number;
-  parallelChildRuns: number;
   taskId: string;
+  fromAnswerCache: boolean;
+  fingerprint: string;
+  docSetHash: string;
+  result: SmoldocActionableResult;
+  answerMarkdown: string;
 }): CallToolResult {
   const structured = {
     taskId: payload.taskId,
-    answerMarkdown: payload.answerMarkdown,
-    sources: payload.sources,
-    fromAnswerCache: payload.fromAnswerCache,
-    pagesFetched: payload.pagesFetched,
-    parallelChildRuns: payload.parallelChildRuns,
+    from_answer_cache: payload.fromAnswerCache,
+    fingerprint: payload.fingerprint,
+    doc_set_hash: payload.docSetHash,
+    result: payload.result,
+    answer_markdown: payload.answerMarkdown,
   };
   return {
     content: [
       {
         type: "text",
-        text: payload.answerMarkdown,
+        text: JSON.stringify(payload.result, null, 2),
       },
     ],
     structuredContent: structured,

@@ -1,61 +1,76 @@
-# smoldoc
+# smoldoc — Doc reasoning coprocessor (MCP)
 
-Documentation research **MCP server** (stdio): long jobs are **async MCP tasks** (Redis). A **worker** processes each job with the **[Pi coding agent SDK](https://pi.dev/docs/latest/sdk)** (`createAgentSession` from `@mariozechner/pi-coding-agent`).
+**Principal agent** = orchestration / décision finale. **Smoldoc** = spécialiste doc (RAG + analyse + réponse **JSON** actionnable), via **MCP tasks** + worker **Pi SDK**.
 
-The coordinator instructions live in `packages/server/prompts/coordinator.md`: the model **designs and implements its own research harness** (using Pi’s default tools: `read`, `bash`, `write`, `edit`, `grep`, `find`, `ls`), may **parallelize** (e.g. multiple `bash` calls), then returns a **short actionable** answer. The worker passes **`OPENAI_API_KEY`** into Pi via `AuthStorage.setRuntimeApiKey("openai", …)` as in the SDK docs.
-
-PostgreSQL migrations still create cache tables from earlier iterations; the Pi SDK path does not populate them yet.
+Référence Pi : [SDK](https://pi.dev/docs/latest/sdk).
 
 ## Architecture
 
-- **MCP** (`packages/server/dist/mcp.js`): `doc_research` tool with **experimental tasks**; task state in **Redis**.
-- **Worker** (`packages/server/dist/worker.js`): **BullMQ** → `createAgentSession` → `session.prompt(...)` → final markdown + optional `SMOLDOC_META_JSON:` line.
+| Couche | Où | Rôle |
+|--------|-----|------|
+| **Layer A** (raw HTTP + cache fichier + PG `doc_page_cache`) | **Skills Pi** + scripts `dist/scripts/*.js` | `fetch-doc` (curl + ETag + option `--browser` / Chromium), `parse-doc`, `detect-version` |
+| **Layer B** (chunks + embeddings pgvector `doc_chunks`) | Même scripts + Postgres | `chunk-embed-index`, `retrieve-evidence` |
+| **Semantic cache** | Worker Node + table `semantic_query_cache` | Fingerprint (intent + version policy + scope + URLs) + `doc_set_hash` + modèle + hash du prompt coordinateur |
+| **Sortie** | Dernière ligne `SMOLDOC_RESULT_JSON:{...}` | Schéma `SmoldocActionableResult` (Zod) — MCP `structuredContent` |
 
-## Prerequisites
+Les skills vivent sous **`packages/server/.pi/skills/`** (copiés dans `dist/.pi` au build). **`SMOLDOC_PI_CWD`** doit pointer vers **`packages/server`** (ou une copie contenant `.pi/`).
+
+## Prérequis
 
 - Node 22+, pnpm 9
-- Docker for Postgres + Redis
-- **`OPENAI_API_KEY`** (or `OPENAPI_API_KEY`) on the **worker** process for Pi’s OpenAI provider
+- **Postgres avec pgvector** (image `pgvector/pgvector:pg16` dans `docker-compose.yml`)
+- Redis
+- **`OPENAI_API_KEY`** sur le **worker** (embeddings + Pi)
 
-## Quick start
+## Variables d’environnement
+
+| Variable | Où | Description |
+|----------|-----|-------------|
+| `DATABASE_URL`, `REDIS_URL` | MCP + worker | Infra |
+| `OPENAI_API_KEY` / `OPENAPI_API_KEY` | **Worker** | Pi + embeddings |
+| `SMOLDOC_PI_CWD` | Worker | Répertoire Pi (défaut `cwd` → utiliser chemin absolu vers `packages/server`) |
+| `SMOLDOC_SCRIPTS_DIR` | Worker + scripts | Défaut `packages/server/dist/scripts` |
+| `SMOLDOC_PI_AGENT_DIR` | Worker | Cache auth Pi (`auth.json`) |
+| `SMOLDOC_PI_MODEL` | Worker | Modèle OpenAI Pi (ex. `gpt-5.5`) |
+| `SMOLDOC_PI_THINKING` | Worker | `high`, etc. |
+
+## Build & run
 
 ```bash
-cp .env.example .env
-# Set OPENAI_API_KEY, DATABASE_URL, REDIS_URL, SMOLDOC_PI_CWD (repo root)
+docker compose up -d postgres redis   # utilise pgvector
 
-docker compose up -d postgres redis
+cp .env.example .env
+# Renseigner OPENAI_API_KEY, DATABASE_URL, REDIS_URL
+# SMOLDOC_PI_CWD=/abs/path/to/repo/packages/server
 
 pnpm install
 pnpm run build
 
-# Terminal 1 — worker (needs OpenAI key in env)
 pnpm --filter @smoldoc/server start:worker
-
-# Terminal 2 — MCP stdio
 pnpm --filter @smoldoc/server start:mcp
 ```
 
-### Cursor
+## Outil MCP `doc_research`
 
-Configure `node …/packages/server/dist/mcp.js` with `DATABASE_URL` and `REDIS_URL`. Run the worker on a host that has **`OPENAI_API_KEY`** and set `SMOLDOC_PI_CWD` to your project root if you want the agent to read local files.
+Entrée (snake_case) :
 
-Clients must support **MCP tasks** and respect **`pollInterval`** (~30s).
+- `goal`, `context?`
+- `version_policy`: `explicit` | `latest` | `latest_stable` | `range`
+- `explicit_version?`, `as_of_date?`, `version_range?`
+- `source?`, `product?`, `scope?`
+- `urls[]`
 
-## Environment
+Sortie `structuredContent` : `result` (objet typé), `from_answer_cache`, `fingerprint`, `doc_set_hash`, `answer_markdown`, `taskId`.
 
-| Variable | Where | Purpose |
-|----------|--------|---------|
-| `DATABASE_URL`, `REDIS_URL` | MCP + worker | Infra |
-| `OPENAI_API_KEY` or `OPENAPI_API_KEY` | **Worker only** | Pi OpenAI auth (`setRuntimeApiKey`) |
-| `SMOLDOC_PI_CWD` | Worker | Pi session cwd (skills, files) |
-| `SMOLDOC_PI_AGENT_DIR` | Worker | Pi `auth.json` / `models.json` dir (default: temp) |
-| `SMOLDOC_PI_MODEL` | Worker | OpenAI model id for Pi (default `gpt-5.5`) |
-| `SMOLDOC_PI_THINKING` | Worker | Pi thinking level (default `high`) |
+## Docker profile `app`
 
-## Docker Compose
+`docker compose --profile app up -d --build` — monte le repo sous `/workspace` ; worker avec `SMOLDOC_PI_CWD=/workspace/packages/server`.
 
-`docker compose up -d postgres redis` for infra. Profile **`app`** runs MCP + worker images; mount your repo at `/workspace` and set `OPENAI_API_KEY`.
+## Scripts (Layer A / B)
 
-## Stack
+Après `pnpm run build` :
 
-TypeScript, `@modelcontextprotocol/server` (v2 alpha), Zod 4, BullMQ, ioredis, pg, **`@mariozechner/pi-coding-agent`** (Pi SDK).
+- `node packages/server/dist/scripts/fetch-doc.js --url … --doc-version … [--browser]`
+- `parse-doc.js`, `detect-version.js`, `chunk-embed-index.js`, `retrieve-evidence.js`, `self-check.js`
+
+`CHROMIUM_PATH` peut pointer vers un binaire Chromium custom.

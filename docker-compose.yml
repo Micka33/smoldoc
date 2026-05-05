@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: smoldoc
       POSTGRES_PASSWORD: smoldoc
@@ -61,8 +61,9 @@ services:
       REDIS_URL: redis://redis:6379
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAPI_API_KEY: ${OPENAPI_API_KEY:-}
-      SMOLDOC_PI_CWD: /workspace
+      SMOLDOC_PI_CWD: /workspace/packages/server
       SMOLDOC_PI_AGENT_DIR: /data/pi-agent
+      SMOLDOC_SCRIPTS_DIR: /app/packages/server/dist/scripts
       SMOLDOC_PI_MODEL: ${SMOLDOC_PI_MODEL:-gpt-5.5}
       SMOLDOC_PI_THINKING: ${SMOLDOC_PI_THINKING:-high}
       SMOLDOC_PAGE_CACHE_DIR: /data/pages

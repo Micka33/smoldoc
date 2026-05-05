@@ -3,11 +3,22 @@ import type { RedisOptions } from "ioredis";
 
 export const DOC_RESEARCH_QUEUE = "smoldoc-doc-research";
 
+export type VersionPolicy = "explicit" | "latest" | "latest_stable" | "range";
+
 export type DocResearchJobData = {
   taskId: string;
   goal: string;
   context?: string;
+  /** Resolved label used for DB + cache (e.g. v2.3 or latest-2026-05-04) */
   docVersion: string;
+  /** Original policy from caller */
+  versionPolicy: VersionPolicy;
+  explicitVersion?: string;
+  asOfDate?: string;
+  versionRange?: string;
+  source?: string;
+  product?: string;
+  scope?: string;
   urls: string[];
 };
 

@@ -11,16 +11,23 @@ import {
   SettingsManager,
 } from "@mariozechner/pi-coding-agent";
 import type { SmoldocWorkerEnv } from "../env.js";
+import type { DocResearchJobData } from "../queue/docResearchQueue.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-/** Loaded once: coordinator role + harness instructions (placeholders filled per job). */
 let coordinatorTemplateText = "";
 
 function fillCoordinatorTemplate(input: {
   goal: string;
   context: string;
   docVersion: string;
+  versionPolicy: string;
+  explicitVersion: string;
+  asOfDate: string;
+  versionRange: string;
+  source: string;
+  product: string;
+  scope: string;
   urls: string[];
 }): string {
   const context = input.context.trim() || "(none)";
@@ -28,7 +35,14 @@ function fillCoordinatorTemplate(input: {
   return coordinatorTemplateText
     .replaceAll("{{GOAL}}", input.goal)
     .replaceAll("{{CONTEXT}}", context)
-    .replaceAll("{{DOC_VERSION}}", input.docVersion)
+    .replaceAll("{{DOC_VERSION_LABEL}}", input.docVersion)
+    .replaceAll("{{VERSION_POLICY}}", input.versionPolicy)
+    .replaceAll("{{EXPLICIT_VERSION}}", input.explicitVersion)
+    .replaceAll("{{AS_OF_DATE}}", input.asOfDate)
+    .replaceAll("{{VERSION_RANGE}}", input.versionRange)
+    .replaceAll("{{SOURCE}}", input.source || "(none)")
+    .replaceAll("{{PRODUCT}}", input.product || "(none)")
+    .replaceAll("{{SCOPE}}", input.scope || "(none)")
     .replaceAll("{{URLS}}", urls);
 }
 
@@ -50,37 +64,33 @@ export async function loadCoordinatorPromptTemplate(): Promise<void> {
   );
 }
 
+export function getLoadedCoordinatorText(): string {
+  if (!coordinatorTemplateText) {
+    throw new Error("Coordinator prompt not loaded");
+  }
+  return coordinatorTemplateText;
+}
+
 export type PiDocResearchResult = {
   answerMarkdown: string;
-  pagesFetched: number;
-  parallelChildRuns: number;
+  /** Parsed structured result; null if model omitted SMOLDOC_RESULT_JSON */
+  structured: import("../types/actionableResult.js").SmoldocActionableResult | null;
+  parseError?: string;
 };
 
 function parseMetaLine(full: string): {
   body: string;
-  pagesFetched: number;
-  parallelChildRuns: number;
 } {
   const lines = full.split("\n");
-  let pagesFetched = 0;
-  let parallelChildRuns = 0;
   let cut = lines.length;
   for (let i = lines.length - 1; i >= 0; i--) {
     const line = lines[i].trim();
-    if (!line.startsWith("SMOLDOC_META_JSON:")) continue;
-    const jsonPart = line.slice("SMOLDOC_META_JSON:".length).trim();
-    try {
-      const o = JSON.parse(jsonPart) as { pagesFetched?: number; parallelChildRuns?: number };
-      if (typeof o.pagesFetched === "number") pagesFetched = o.pagesFetched;
-      if (typeof o.parallelChildRuns === "number") parallelChildRuns = o.parallelChildRuns;
-    } catch {
-      /* ignore */
-    }
+    if (!line.startsWith("SMOLDOC_RESULT_JSON:")) continue;
     cut = i;
     break;
   }
   const body = lines.slice(0, cut).join("\n").trimEnd();
-  return { body, pagesFetched, parallelChildRuns };
+  return { body };
 }
 
 function isAssistantMessage(m: unknown): m is AssistantMessage {
@@ -114,20 +124,18 @@ function lastAssistantText(messages: unknown[]): string {
 
 /**
  * Pi Coding Agent SDK: https://pi.dev/docs/latest/sdk
- * OpenAI key is passed via AuthStorage.setRuntimeApiKey (same as SDK docs).
  */
 export async function runPiDocResearchWithSdk(
   env: SmoldocWorkerEnv,
-  input: {
-    goal: string;
-    context?: string;
-    docVersion: string;
-    urls: string[];
-  },
+  job: DocResearchJobData,
 ): Promise<PiDocResearchResult> {
   if (!coordinatorTemplateText) {
     await loadCoordinatorPromptTemplate();
   }
+
+  process.env.DATABASE_URL = env.databaseUrl;
+  process.env.OPENAI_API_KEY = env.openaiApiKey;
+  process.env.SMOLDOC_SCRIPTS_DIR = env.smoldocScriptsDir;
 
   await mkdir(env.piAgentDir, { recursive: true });
   const authStorage = AuthStorage.create(join(env.piAgentDir, "auth.json"));
@@ -169,22 +177,52 @@ export async function runPiDocResearchWithSdk(
   });
 
   try {
-    const userPrompt = fillCoordinatorTemplate({
-      goal: input.goal,
-      context: input.context ?? "",
-      docVersion: input.docVersion,
-      urls: input.urls,
+    const systemFilled = fillCoordinatorTemplate({
+      goal: job.goal,
+      context: job.context ?? "",
+      docVersion: job.docVersion,
+      versionPolicy: job.versionPolicy,
+      explicitVersion: job.explicitVersion ?? "",
+      asOfDate: job.asOfDate ?? "",
+      versionRange: job.versionRange ?? "",
+      source: job.source ?? "",
+      product: job.product ?? "",
+      scope: job.scope ?? "",
+      urls: job.urls,
     });
+
+    const jobJson = JSON.stringify(
+      {
+        goal: job.goal,
+        context: job.context,
+        docVersion: job.docVersion,
+        versionPolicy: job.versionPolicy,
+        explicitVersion: job.explicitVersion,
+        asOfDate: job.asOfDate,
+        versionRange: job.versionRange,
+        source: job.source,
+        product: job.product,
+        scope: job.scope,
+        urls: job.urls,
+        scriptsDir: env.smoldocScriptsDir,
+      },
+      null,
+      2,
+    );
+
+    const userPrompt = `${systemFilled}\n\n---\n\n## Job payload (machine)\n\n\`\`\`json\n${jobJson}\n\`\`\`\n\nExecute the pipeline using the skills. Output markdown + final SMOLDOC_RESULT_JSON line.`;
 
     await session.prompt(userPrompt);
 
     const combined = lastAssistantText(session.messages);
-    const { body, pagesFetched, parallelChildRuns } = parseMetaLine(combined);
+    const { body } = parseMetaLine(combined);
+    const { parseSmoldocResultJson } = await import("../types/actionableResult.js");
+    const parsed = parseSmoldocResultJson(combined);
 
     return {
       answerMarkdown: body.trim().length > 0 ? body.trim() : combined.trim(),
-      pagesFetched,
-      parallelChildRuns,
+      structured: parsed.result,
+      parseError: parsed.parseError,
     };
   } finally {
     session.dispose();

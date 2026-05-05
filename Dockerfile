@@ -1,6 +1,5 @@
-FROM node:22-bookworm-slim
-
-RUN corepack enable && corepack prepare pnpm@9.15.5 --activate
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates chromium \
+  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
