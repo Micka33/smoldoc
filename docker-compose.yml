@@ -1,0 +1,86 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: smoldoc
+      POSTGRES_PASSWORD: smoldoc
+      POSTGRES_DB: smoldoc
+    ports:
+      - "5432:5432"
+    volumes:
+      - smoldoc_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smoldoc -d smoldoc"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - smoldoc_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  smoldoc-mcp:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["node", "dist/mcp.js"]
+    environment:
+      DATABASE_URL: postgresql://smoldoc:smoldoc@postgres:5432/smoldoc
+      REDIS_URL: redis://redis:6379
+      SMOLDOC_PAGE_CACHE_DIR: /data/pages
+      SMOLDOC_ALLOWED_HOSTS: ${SMOLDOC_ALLOWED_HOSTS:-}
+    volumes:
+      - smoldoc_pages:/data/pages
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    stdin_open: true
+    tty: true
+
+  smoldoc-worker:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["node", "dist/worker.js"]
+    working_dir: /app/packages/server
+    environment:
+      DATABASE_URL: postgresql://smoldoc:smoldoc@postgres:5432/smoldoc
+      REDIS_URL: redis://redis:6379
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAPI_API_KEY: ${OPENAPI_API_KEY:-}
+      SMOLDOC_PI_CWD: /workspace/packages/server
+      SMOLDOC_PI_AGENT_DIR: /data/pi-agent
+      SMOLDOC_SCRIPTS_DIR: /app/packages/server/dist/scripts
+      SMOLDOC_PI_MODEL: ${SMOLDOC_PI_MODEL:-gpt-5.5}
+      SMOLDOC_PI_THINKING: ${SMOLDOC_PI_THINKING:-high}
+      SMOLDOC_PAGE_CACHE_DIR: /data/pages
+      SMOLDOC_ALLOWED_HOSTS: ${SMOLDOC_ALLOWED_HOSTS:-}
+      PI_SKIP_VERSION_CHECK: "1"
+    volumes:
+      - smoldoc_pages:/data/pages
+      - pi_agent_state:/data/pi-agent
+      - .:/workspace
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  smoldoc_pg:
+  smoldoc_redis:
+  smoldoc_pages:
+  pi_agent_state:

@@ -1,0 +1,33 @@
+{
+  "name": "@smoldoc/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/mcp.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.scripts.json && bash -c 'set -e; if [ -d dist/scripts/scripts ]; then mkdir -p dist/scripts.tmp/semver; cp dist/scripts/scripts/*.js dist/scripts.tmp/; cp dist/scripts/semver/*.js dist/scripts.tmp/semver/; rm -rf dist/scripts; mv dist/scripts.tmp dist/scripts; sed -i \"s|from \\\"../semver/semverRange.js\\\"|from \\\"./semver/semverRange.js\\\"|g\" dist/scripts/resolve-version.js; fi' && mkdir -p dist/db/migrations dist/prompts dist/.pi && cp -r src/db/migrations/. dist/db/migrations/ && cp -r prompts/. dist/prompts/ && cp -r .pi/. dist/.pi/",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev:mcp": "tsx src/mcp.ts",
+    "dev:worker": "tsx src/worker.ts",
+    "start:mcp": "node dist/mcp.js",
+    "start:worker": "node dist/worker.js",
+    "test:e2e": "pnpm run build && tsx src/e2e-smoke.ts"
+  },
+  "dependencies": {
+    "@mariozechner/pi-ai": "^0.73.0",
+    "@mariozechner/pi-coding-agent": "^0.73.0",
+    "@modelcontextprotocol/server": "2.0.0-alpha.2",
+    "bullmq": "^5.34.10",
+    "ioredis": "^5.4.2",
+    "openai": "^6.36.0",
+    "pg": "^8.13.1",
+    "undici": "^8.2.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.5",
+    "@types/pg": "^8.11.11",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
