@@ -12,6 +12,7 @@ import { Queue, QueueEvents, Worker } from "bullmq";
 import { Redis } from "ioredis";
 import type { Request } from "@modelcontextprotocol/server";
 import { runMigrations } from "./db/migrate.js";
+import { createPool } from "./db/pool.js";
 import {
   DOC_RESEARCH_QUEUE,
   parseRedisUrl,
@@ -69,6 +70,18 @@ async function tcpOpen(host: string, port: number, ms = 2000): Promise<boolean> 
 }
 
 async function phaseScripts(): Promise<void> {
+  const dbUrl = process.env.DATABASE_URL?.trim();
+  if (dbUrl) {
+    console.log("\n=== Phase 0: DB migrations (for fetch-doc PG upsert) ===\n");
+    const pool = createPool(dbUrl);
+    try {
+      await runMigrations(pool);
+      console.log("Migrations OK");
+    } finally {
+      await pool.end();
+    }
+  }
+
   console.log("\n=== Phase 1: fetch-doc (real HTTP) ===\n");
   const docVersion = "e2e-" + Date.now();
   const r = await runNodeScript("fetch-doc.js", [
